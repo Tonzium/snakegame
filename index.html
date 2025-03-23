@@ -5,7 +5,7 @@
   <title>Snake Game</title>
   <style>
     canvas {
-      border: 1px solid #000;
+      border: 1px solid #555;
       background-color: #000;
       display: block;
       margin: 0 auto;
@@ -117,8 +117,15 @@
       ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
     }
 
+    function drawBorder() {
+      ctx.strokeStyle = 'grey';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(0, 0, canvas.width, canvas.height);
+    }
+
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawBorder();
       drawCell(reward.x, reward.y, 'green');
       snake.body.forEach(p => drawCell(p.x, p.y, snake.color));
       aiSnake.body.forEach(p => drawCell(p.x, p.y, aiSnake.color));
@@ -130,7 +137,8 @@
     function update() {
       moveSnake(snake);
       if (collision(snake)) {
-        alert(`Game Over! Your Score: ${snake.score}`);
+        let result = snake.score > aiSnake.score ? "You Win! 🏆" : "You Lose! 😢";
+        alert(`${result}\nFinal Score: You (${snake.score}) - AI (${aiSnake.score})`);
         document.location.reload();
       }
       if (snake.body[0].x === reward.x && snake.body[0].y === reward.y) {
