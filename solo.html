@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Snake Game</title>
+  <style>
+    canvas {
+      border: 1px solid #555;
+      background-color: #000;
+      display: block;
+      margin: 0 auto;
+    }
+    body {
+      text-align: center;
+      font-family: Arial, sans-serif;
+      color: white;
+      background-color: black;
+    }
+  </style>
+</head>
+<body>
+  <h2>Snake Game</h2>
+  <canvas id="game" width="600" height="600"></canvas>
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+
+    const GRID_SIZE = 30;
+    const CELL_SIZE = canvas.width / GRID_SIZE;
+
+    const DIRECTIONS = {
+      'ArrowUp': [0, -1],
+      'ArrowDown': [0, 1],
+      'ArrowLeft': [-1, 0],
+      'ArrowRight': [1, 0],
+      'w': [0, -1],
+      's': [0, 1],
+      'a': [-1, 0],
+      'd': [1, 0]
+    };
+
+    let snake = {
+      body: [{x: 5, y: 15}, {x: 4, y: 15}, {x: 3, y: 15}],
+      dir: {x: 1, y: 0},
+      grow: false,
+      color: 'white',
+      score: 0
+    };
+
+    let aiSnake = {
+      body: [{x: 24, y: 15}, {x: 25, y: 15}, {x: 26, y: 15}],
+      dir: {x: -1, y: 0},
+      grow: false,
+      color: 'blue',
+      score: 0
+    };
+
+    let reward = {x: 10, y: 10};
+    let gameOver = false;
+
+    function randomReward() {
+      while (true) {
+        let pos = {
+          x: Math.floor(Math.random() * GRID_SIZE),
+          y: Math.floor(Math.random() * GRID_SIZE)
+        };
+        if (!snake.body.some(p => p.x === pos.x && p.y === pos.y) &&
+            !aiSnake.body.some(p => p.x === pos.x && p.y === pos.y))
+          return pos;
+      }
+    }
+
+    document.addEventListener('keydown', e => {
+      const newDir = DIRECTIONS[e.key];
+      if (newDir && !gameOver) {
+        if (snake.dir.x + newDir[0] !== 0 || snake.dir.y + newDir[1] !== 0)
+          snake.dir = {x: newDir[0], y: newDir[1]};
+      }
+    });
+
+    function moveSnake(s) {
+      const newHead = {x: s.body[0].x + s.dir.x, y: s.body[0].y + s.dir.y};
+      if (!s.grow) s.body.pop(); else s.grow = false;
+      s.body.unshift(newHead);
+    }
+
+    function collision(s) {
+      const head = s.body[0];
+      return (
+        head.x < 0 || head.x >= GRID_SIZE ||
+        head.y < 0 || head.y >= GRID_SIZE ||
+        s.body.slice(1).some(p => p.x === head.x && p.y === head.y)
+      );
+    }
+
+    function aiChooseDirection() {
+      const head = aiSnake.body[0];
+      let bestDir = aiSnake.dir;
+      let minDist = Infinity;
+
+      [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}].forEach(d => {
+        const next = {x: head.x + d.x, y: head.y + d.y};
+        if (aiSnake.body.some(p => p.x === next.x && p.y === next.y) ||
+            snake.body.some(p => p.x === next.x && p.y === next.y) ||
+            next.x < 0 || next.x >= GRID_SIZE || next.y < 0 || next.y >= GRID_SIZE)
+          return;
+        const dist = Math.abs(next.x - reward.x) + Math.abs(next.y - reward.y);
+        if (dist < minDist) {
+          minDist = dist;
+          bestDir = d;
+        }
+      });
+      aiSnake.dir = bestDir;
+    }
+
+    function drawCell(x, y, color) {
+      ctx.fillStyle = color;
+      ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+    }
+
+    function drawBorder() {
+      ctx.strokeStyle = 'grey';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawBorder();
+      drawCell(reward.x, reward.y, 'lightgreen');
+      snake.body.forEach(p => drawCell(p.x, p.y, snake.color));
+      aiSnake.body.forEach(p => drawCell(p.x, p.y, aiSnake.color));
+      ctx.fillStyle = 'white';
+	  ctx.font = "20px Arial";
+      ctx.fillText('Player: ' + snake.score, 10, 20);
+      ctx.fillText('AI: ' + aiSnake.score, canvas.width - 50, 20);
+    }
+
+    function endGame(message) {
+      if (!gameOver) {
+        gameOver = true;
+        alert(`${message}\nFinal Score: You (${snake.score}) - AI (${aiSnake.score})`);
+        document.location.reload();
+      }
+    }
+
+    function update() {
+      if (gameOver) return;
+      moveSnake(snake);
+      moveSnake(aiSnake);
+
+      if (collision(snake)) endGame("You Lose! 😢");
+      if (collision(aiSnake)) endGame("You Win! 🏆");
+
+      if (snake.body[0].x === aiSnake.body[0].x && snake.body[0].y === aiSnake.body[0].y)
+        endGame("It's a Tie! 🤝");
+
+      if (aiSnake.body.some(p => p.x === snake.body[0].x && p.y === snake.body[0].y))
+        endGame("You Lose! 😢");
+
+      if (snake.body[0].x === reward.x && snake.body[0].y === reward.y) {
+        snake.grow = true; snake.score++; reward = randomReward();
+      }
+      if (aiSnake.body[0].x === reward.x && aiSnake.body[0].y === reward.y) {
+        aiSnake.grow = true; aiSnake.score++; reward = randomReward();
+      }
+
+      aiChooseDirection();
+      draw();
+    }
+
+    setInterval(update, 100);
+  </script>
+</body>
+</html>

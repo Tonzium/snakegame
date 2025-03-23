@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lobby</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body {
+      background-color: black;
+      color: white;
+      text-align: center;
+      font-family: Arial, sans-serif;
+      margin-top: 50px;
+    }
+    #players {
+      margin: 20px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin-top: 20px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h2>Lobby</h2>
+  <div id="players">Waiting for others...</div>
+
+  <script>
+    const socket = io();
+    const params = new URLSearchParams(window.location.search);
+    const username = params.get('username') || 'Anonymous';
+
+    // Join lobby immediately upon loading
+    socket.emit('joinLobby', { username });
+
+    // Update lobby player list
+    socket.on('updateLobby', players => {
+      let playerHtml = players.filter(p => p.socketId !== socket.id).map(p => 
+        `<button onclick="challengePlayer('${p.socketId}')">${p.username}</button>`
+      ).join('<br>');
+      document.getElementById('players').innerHTML = playerHtml || 'Waiting for others...';
+    });
+
+    // Function to challenge another player
+    function challengePlayer(challengedSocketId) {
+      socket.emit('challengePlayer', { challengedSocketId });
+    }
+
+    // Handle receiving a challenge
+    socket.on('challengeReceived', ({ from, username }) => {
+      if(confirm(`${username} challenged you! Accept?`))
+        socket.emit('acceptChallenge', { fromSocketId: from });
+    });
+
+    // Redirect to game when challenge accepted
+    socket.on('gameStarted', ({ room }) => {
+      window.location.href = `game.html?room=${room}&username=${encodeURIComponent(username)}`;
+    });
+  </script>
+</body>
+</html>

@@ -2,167 +2,218 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Snake Game</title>
+  <title>Two Snakes Game</title>
   <style>
+    body {
+      background-color: black;
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 10px;
+      font-size: 16px;
+      cursor: pointer;
+    }
     canvas {
       border: 1px solid #555;
       background-color: #000;
       display: block;
-      margin: 0 auto;
-    }
-    body {
-      text-align: center;
-      font-family: Arial, sans-serif;
-      color: white;
-      background-color: black;
+      margin: 20px auto;
     }
   </style>
 </head>
 <body>
-  <h2>Snake vs AI Snake Game</h2>
-  <canvas id="game" width="600" height="600"></canvas>
+  <h1>Two Snakes Game</h1>
+  <button onclick="location.href='solo.html'">Solo Game</button>
+  <button onclick="location.href='lobby.html'">Play with Friend</button>
+  <button onclick="window.close()">Exit</button>
+  
+  <!-- Demo canvas for two AI snakes -->
+  <canvas id="demoGame" width="600" height="600"></canvas>
+  
   <script>
-    const canvas = document.getElementById('game');
+    const canvas = document.getElementById('demoGame');
     const ctx = canvas.getContext('2d');
-
+    
     const GRID_SIZE = 30;
     const CELL_SIZE = canvas.width / GRID_SIZE;
-
-    const DIRECTIONS = {
-      'ArrowUp': [0, -1],
-      'ArrowDown': [0, 1],
-      'ArrowLeft': [-1, 0],
-      'ArrowRight': [1, 0],
-      'w': [0, -1],
-      's': [0, 1],
-      'a': [-1, 0],
-      'd': [1, 0]
-    };
-
-    let snake = {
+    
+    // Two AI snakes (snake1 is white, snake2 is blue)
+    let snake1 = {
       body: [{x: 5, y: 15}, {x: 4, y: 15}, {x: 3, y: 15}],
       dir: {x: 1, y: 0},
       grow: false,
       color: 'white',
       score: 0
     };
-
-    let aiSnake = {
+    
+    let snake2 = {
       body: [{x: 24, y: 15}, {x: 25, y: 15}, {x: 26, y: 15}],
       dir: {x: -1, y: 0},
       grow: false,
       color: 'blue',
       score: 0
     };
-
+    
+    // Place the reward (food) in a random cell
     let reward = {x: 10, y: 10};
-
+    
     function randomReward() {
       while (true) {
         let pos = {
           x: Math.floor(Math.random() * GRID_SIZE),
           y: Math.floor(Math.random() * GRID_SIZE)
         };
-        if (!snake.body.some(p => p.x === pos.x && p.y === pos.y) &&
-            !aiSnake.body.some(p => p.x === pos.x && p.y === pos.y))
+        if (!snake1.body.some(p => p.x === pos.x && p.y === pos.y) &&
+            !snake2.body.some(p => p.x === pos.x && p.y === pos.y))
           return pos;
       }
     }
-
-    document.addEventListener('keydown', e => {
-      const newDir = DIRECTIONS[e.key];
-      if (newDir) {
-        if (snake.dir.x + newDir[0] !== 0 || snake.dir.y + newDir[1] !== 0)
-          snake.dir = {x: newDir[0], y: newDir[1]};
-      }
-    });
-
-    function moveSnake(s) {
-      const newHead = {x: s.body[0].x + s.dir.x, y: s.body[0].y + s.dir.y};
-      if (!s.grow) s.body.pop(); else s.grow = false;
-      s.body.unshift(newHead);
-    }
-
-    function collision(s) {
-      const head = s.body[0];
-      return (
-        head.x < 0 || head.x >= GRID_SIZE ||
-        head.y < 0 || head.y >= GRID_SIZE ||
-        s.body.slice(1).some(p => p.x === head.x && p.y === head.y)
-      );
-    }
-
-    function aiChooseDirection() {
-      const head = aiSnake.body[0];
-      let bestDir = aiSnake.dir;
+    
+    // AI decision making: each snake chooses a direction that moves it closer to the reward,
+    // avoiding immediate collisions with walls or their own bodies.
+    function chooseDirection(snake) {
+      const head = snake.body[0];
+      let bestDir = snake.dir;
       let minDist = Infinity;
-
-      [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}].forEach(d => {
+      
+      // Try all four directions: up, down, left, right
+      const directions = [
+        {x: 0, y: -1},
+        {x: 0, y: 1},
+        {x: -1, y: 0},
+        {x: 1, y: 0}
+      ];
+      
+      directions.forEach(d => {
         const next = {x: head.x + d.x, y: head.y + d.y};
-        if (aiSnake.body.some(p => p.x === next.x && p.y === next.y) ||
-            snake.body.some(p => p.x === next.x && p.y === next.y) ||
-            next.x < 0 || next.x >= GRID_SIZE || next.y < 0 || next.y >= GRID_SIZE)
-          return;
+        // Check board boundaries
+        if (next.x < 0 || next.x >= GRID_SIZE || next.y < 0 || next.y >= GRID_SIZE) return;
+        // Check collision with the snake's own body
+        if (snake.body.some(p => p.x === next.x && p.y === next.y)) return;
+        // Check collision with the other snake to avoid immediate crash
+        const otherSnake = (snake === snake1) ? snake2 : snake1;
+        if (otherSnake.body.some(p => p.x === next.x && p.y === next.y)) return;
+        
         const dist = Math.abs(next.x - reward.x) + Math.abs(next.y - reward.y);
         if (dist < minDist) {
           minDist = dist;
           bestDir = d;
         }
       });
-      aiSnake.dir = bestDir;
+      
+      snake.dir = bestDir;
     }
-
+    
+    // Moves a snake by adding a new head based on its direction.
+    // If it isn't growing, remove the tail.
+    function moveSnake(snake) {
+      const newHead = {x: snake.body[0].x + snake.dir.x, y: snake.body[0].y + snake.dir.y};
+      if (!snake.grow) snake.body.pop();
+      else snake.grow = false;
+      snake.body.unshift(newHead);
+    }
+    
+    // Checks if a snake's head collides with walls or its own body.
+    function collision(snake) {
+      const head = snake.body[0];
+      if (head.x < 0 || head.x >= GRID_SIZE || head.y < 0 || head.y >= GRID_SIZE) return true;
+      if (snake.body.slice(1).some(p => p.x === head.x && p.y === head.y)) return true;
+      return false;
+    }
+    
+    // Draws a single cell on the canvas.
     function drawCell(x, y, color) {
       ctx.fillStyle = color;
       ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
     }
-
-    function drawBorder() {
+    
+    // Renders the board, reward, and both snakes.
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw the board border
       ctx.strokeStyle = 'grey';
       ctx.lineWidth = 2;
       ctx.strokeRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw the reward (food)
+      drawCell(reward.x, reward.y, 'lightgreen');
+      
+      // Draw both snakes
+      snake1.body.forEach(p => drawCell(p.x, p.y, snake1.color));
+      snake2.body.forEach(p => drawCell(p.x, p.y, snake2.color));
+      
+      // Optionally display scores
+      // ctx.fillStyle = 'white';
+      // ctx.font = "20px Arial";
+      // ctx.fillText('Veijo: ' + snake1.score, 10, 20);
+      // ctx.fillText('Toni: ' + snake2.score, canvas.width - 150, 20);
     }
-
-    function draw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      drawBorder();
-      drawCell(reward.x, reward.y, 'green');
-      snake.body.forEach(p => drawCell(p.x, p.y, snake.color));
-      aiSnake.body.forEach(p => drawCell(p.x, p.y, aiSnake.color));
-      ctx.fillStyle = 'white';
-      ctx.fillText('Player: ' + snake.score, 10, 20);
-      ctx.fillText('AI: ' + aiSnake.score, canvas.width - 50, 20);
+    
+    // Resets both snakes and the reward after a collision.
+    function resetGame() {
+      snake1 = {
+        body: [{x: 5, y: 15}, {x: 4, y: 15}, {x: 3, y: 15}],
+        dir: {x: 1, y: 0},
+        grow: false,
+        color: 'white',
+        score: 0
+      };
+      snake2 = {
+        body: [{x: 24, y: 15}, {x: 25, y: 15}, {x: 26, y: 15}],
+        dir: {x: -1, y: 0},
+        grow: false,
+        color: 'blue',
+        score: 0
+      };
+      reward = randomReward();
     }
-
-    function endGame(message) {
-      alert(`${message}\nFinal Score: You (${snake.score}) - AI (${aiSnake.score})`);
-      document.location.reload();
-    }
-
+    
+    // Main update loop: each interval the snakes choose a new direction,
+    // move, and then the game checks for collisions or reward collection.
     function update() {
-      moveSnake(snake);
-      moveSnake(aiSnake);
-
-      if (collision(snake)) endGame("You Lose! 😢");
-      if (collision(aiSnake)) endGame("You Win! 🏆");
-
-      if (snake.body[0].x === aiSnake.body[0].x && snake.body[0].y === aiSnake.body[0].y)
-        endGame("It's a Tie! 🤝");
-
-      if (aiSnake.body.some(p => p.x === snake.body[0].x && p.y === snake.body[0].y))
-        endGame("You Lose! 😢");
-
-      if (snake.body[0].x === reward.x && snake.body[0].y === reward.y) {
-        snake.grow = true; snake.score++; reward = randomReward();
+      chooseDirection(snake1);
+      chooseDirection(snake2);
+      
+      moveSnake(snake1);
+      moveSnake(snake2);
+      
+      // Check for collisions for each snake
+      let collision1 = collision(snake1);
+      let collision2 = collision(snake2);
+      
+      // Check if the heads of the two snakes collide (tie condition)
+      if (snake1.body[0].x === snake2.body[0].x &&
+          snake1.body[0].y === snake2.body[0].y) {
+        collision1 = true;
+        collision2 = true;
       }
-      if (aiSnake.body[0].x === reward.x && aiSnake.body[0].y === reward.y) {
-        aiSnake.grow = true; aiSnake.score++; reward = randomReward();
+      
+      // Reward collection for snake1
+      if (snake1.body[0].x === reward.x && snake1.body[0].y === reward.y) {
+        snake1.grow = true;
+        snake1.score++;
+        reward = randomReward();
       }
-
-      aiChooseDirection();
+      // Reward collection for snake2
+      if (snake2.body[0].x === reward.x && snake2.body[0].y === reward.y) {
+        snake2.grow = true;
+        snake2.score++;
+        reward = randomReward();
+      }
+      
       draw();
+      
+      // If either snake crashes, reset the game after a short pause
+      if (collision1 || collision2) {
+        setTimeout(resetGame, 1000);
+      }
     }
-
+    
+    // Start the game loop (updates every 100ms)
     setInterval(update, 100);
   </script>
 </body>
