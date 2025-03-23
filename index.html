@@ -134,22 +134,32 @@
       ctx.fillText('AI: ' + aiSnake.score, canvas.width - 50, 20);
     }
 
+    function endGame(message) {
+      alert(`${message}\nFinal Score: You (${snake.score}) - AI (${aiSnake.score})`);
+      document.location.reload();
+    }
+
     function update() {
       moveSnake(snake);
-      if (collision(snake)) {
-        let result = snake.score > aiSnake.score ? "You Win! 🏆" : "You Lose! 😢";
-        alert(`${result}\nFinal Score: You (${snake.score}) - AI (${aiSnake.score})`);
-        document.location.reload();
-      }
+      moveSnake(aiSnake);
+
+      if (collision(snake)) endGame("You Lose! 😢");
+      if (collision(aiSnake)) endGame("You Win! 🏆");
+
+      if (snake.body[0].x === aiSnake.body[0].x && snake.body[0].y === aiSnake.body[0].y)
+        endGame("It's a Tie! 🤝");
+
+      if (aiSnake.body.some(p => p.x === snake.body[0].x && p.y === snake.body[0].y))
+        endGame("You Lose! 😢");
+
       if (snake.body[0].x === reward.x && snake.body[0].y === reward.y) {
         snake.grow = true; snake.score++; reward = randomReward();
       }
-      aiChooseDirection();
-      moveSnake(aiSnake);
-      if (collision(aiSnake)) aiSnake = {body: [], dir: {x:0,y:0}};
-      if (aiSnake.body[0]?.x === reward.x && aiSnake.body[0]?.y === reward.y) {
+      if (aiSnake.body[0].x === reward.x && aiSnake.body[0].y === reward.y) {
         aiSnake.grow = true; aiSnake.score++; reward = randomReward();
       }
+
+      aiChooseDirection();
       draw();
     }
 
