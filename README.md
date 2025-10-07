@@ -83,7 +83,7 @@ Each button triggers the same movement as the corresponding keyboard key.
 
 1. **Clone or download** the repository:
    ```bash
-   git clone https://github.com/yourusername/snake-ai-game.git
+   git clone https://github.com/Tonzium/snakegame.git
    ```
   
 2. **Open** the index.html file in any modern web browser.
