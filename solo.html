@@ -1,26 +1,112 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Snake Game</title>
   <style>
-    canvas {
-      border: 1px solid #555;
-      background-color: #000;
-      display: block;
-      margin: 0 auto;
+    :root {
+      --btn-size: 105px;       /* Larger buttons */
+      --btn-gap: 18px;
+      --accent: #1e90ff;
     }
+
     body {
       text-align: center;
       font-family: Arial, sans-serif;
       color: white;
       background-color: black;
+      margin: 0;
+      padding: 16px 12px calc(env(safe-area-inset-bottom) + 16px);
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    canvas {
+      border: 1px solid #555;
+      background-color: #000;
+      display: block;
+      margin: 0 auto 18px auto;
+      max-width: 95vw;
+      height: auto;
+      touch-action: none;
+    }
+
+    /* On-screen controls container */
+    .controls {
+      width: 100%;
+      max-width: 450px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-rows: auto auto auto;
+      gap: var(--btn-gap);
+      justify-items: center;
+      align-items: center;
+      touch-action: manipulation;
+      position: relative;
+    }
+
+    /* Layout like D-pad */
+    .up    { grid-column: 2; grid-row: 1; }
+    .left  { grid-column: 1; grid-row: 2; }
+    .right { grid-column: 3; grid-row: 2; }
+    .down  { grid-column: 2; grid-row: 3; margin-top: 8px; } /* Lower down button */
+
+    .ctrl-btn {
+      width: var(--btn-size);
+      height: var(--btn-size);
+      border-radius: 18px;
+      border: 2px solid #444;
+      background: #111;
+      color: #fff;
+      font-size: 38px;
+      font-weight: bold;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 14px rgba(0,0,0,0.4);
+      transition: transform 0.02s ease, background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .ctrl-btn:active {
+      transform: scale(0.97);
+      background: #0d0d0d;
+      border-color: var(--accent);
+    }
+
+    .ctrl-btn:focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    h2 { margin: 10px 0 12px; }
+
+    .scores {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-bottom: 8px;
+      color: #ddd;
+      font-size: 14px;
+      opacity: .9;
     }
   </style>
 </head>
 <body>
   <h2>Snake Game</h2>
-  <canvas id="game" width="600" height="600"></canvas>
+  <div class="scores" id="scores" aria-live="polite"></div>
+
+  <canvas id="game" width="600" height="600" aria-label="Snake game board"></canvas>
+
+  <!-- On-screen mobile controls -->
+  <div class="controls" aria-label="Directional controls">
+    <button class="ctrl-btn up"    id="btnUp"    aria-label="Move up">▲</button>
+    <button class="ctrl-btn left"  id="btnLeft"  aria-label="Move left">◀</button>
+    <button class="ctrl-btn right" id="btnRight" aria-label="Move right">▶</button>
+    <button class="ctrl-btn down"  id="btnDown"  aria-label="Move down">▼</button>
+  </div>
+
   <script>
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
@@ -70,13 +156,25 @@
       }
     }
 
-    document.addEventListener('keydown', e => {
-      const newDir = DIRECTIONS[e.key];
-      if (newDir && !gameOver) {
-        if (snake.dir.x + newDir[0] !== 0 || snake.dir.y + newDir[1] !== 0)
-          snake.dir = {x: newDir[0], y: newDir[1]};
+    function changeDir(keyLike) {
+      const newDir = DIRECTIONS[keyLike];
+      if (!newDir || gameOver) return;
+      if (snake.dir.x + newDir[0] !== 0 || snake.dir.y + newDir[1] !== 0) {
+        snake.dir = { x: newDir[0], y: newDir[1] };
       }
-    });
+    }
+
+    document.addEventListener('keydown', e => changeDir(e.key));
+
+    const bindBtn = (el, keyLike) => {
+      ['pointerdown','click'].forEach(evt =>
+        el.addEventListener(evt, ev => { ev.preventDefault(); changeDir(keyLike); }, { passive: false })
+      );
+    };
+    bindBtn(document.getElementById('btnUp'), 'ArrowUp');
+    bindBtn(document.getElementById('btnDown'), 'ArrowDown');
+    bindBtn(document.getElementById('btnLeft'), 'ArrowLeft');
+    bindBtn(document.getElementById('btnRight'), 'ArrowRight');
 
     function moveSnake(s) {
       const newHead = {x: s.body[0].x + s.dir.x, y: s.body[0].y + s.dir.y};
@@ -130,10 +228,15 @@
       drawCell(reward.x, reward.y, 'lightgreen');
       snake.body.forEach(p => drawCell(p.x, p.y, snake.color));
       aiSnake.body.forEach(p => drawCell(p.x, p.y, aiSnake.color));
+
       ctx.fillStyle = 'white';
-	  ctx.font = "20px Arial";
+      ctx.font = "20px Arial";
       ctx.fillText('Player: ' + snake.score, 10, 20);
-      ctx.fillText('AI: ' + aiSnake.score, canvas.width - 50, 20);
+      const aiLabel = 'AI: ' + aiSnake.score;
+      const metrics = ctx.measureText(aiLabel);
+      ctx.fillText(aiLabel, canvas.width - metrics.width - 10, 20);
+      document.getElementById('scores').textContent =
+        `Player: ${snake.score} | AI: ${aiSnake.score}`;
     }
 
     function endGame(message) {
@@ -151,10 +254,8 @@
 
       if (collision(snake)) endGame("You Lose! 😢");
       if (collision(aiSnake)) endGame("You Win! 🏆");
-
       if (snake.body[0].x === aiSnake.body[0].x && snake.body[0].y === aiSnake.body[0].y)
         endGame("It's a Tie! 🤝");
-
       if (aiSnake.body.some(p => p.x === snake.body[0].x && p.y === snake.body[0].y))
         endGame("You Lose! 😢");
 
