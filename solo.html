@@ -2,15 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <!-- Ensure proper scaling and tap targets on mobile -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Snake Game</title>
+
   <style>
+    /* =========
+       THEME/TOKENS
+       Centralized CSS custom properties so button size/spacing/brand color
+       can be tweaked in one place.
+       ========= */
     :root {
-      --btn-size: 105px;       /* Larger buttons */
-      --btn-gap: 18px;
-      --accent: #1e90ff;
+      --btn-size: 88px;      /* Increase/decrease to resize on-screen controls */
+      --btn-gap: 16px;       /* Spacing between D-pad buttons */
+      --accent: #1e90ff;     /* Focus/active accent color for accessibility */
     }
 
+    /* =========
+       PAGE LAYOUT / GLOBAL
+       - Disable text selection to avoid accidental highlights during play.
+       - Add safe-area padding for iOS notches (env() handles that).
+       ========= */
     body {
       text-align: center;
       font-family: Arial, sans-serif;
@@ -22,66 +34,82 @@
       user-select: none;
     }
 
+    /* =========
+       GAME CANVAS
+       - Keep a visible border.
+       - max-width maintains responsiveness; height:auto preserves aspect via intrinsic size.
+       - touch-action:none prevents the page from scrolling when swiping on canvas.
+       ========= */
     canvas {
       border: 1px solid #555;
       background-color: #000;
       display: block;
       margin: 0 auto 18px auto;
       max-width: 95vw;
-      height: auto;
-      touch-action: none;
+      height: auto; /* keep square via intrinsic size from width/height attributes */
+      touch-action: none; /* avoid page scroll on touch devices while playing */
     }
 
-    /* On-screen controls container */
+    /* =========
+       ON-SCREEN CONTROLS
+       - Grid layout places Up centered on row 1 and Left/Down/Right on row 2.
+       - touch-action: manipulation reduces delay after taps on mobile browsers.
+       ========= */
     .controls {
       width: 100%;
-      max-width: 450px;
+      max-width: 420px;
       margin: 0 auto;
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
-      grid-template-rows: auto auto auto;
+      grid-template-rows: auto auto;
       gap: var(--btn-gap);
       justify-items: center;
       align-items: center;
       touch-action: manipulation;
-      position: relative;
     }
 
-    /* Layout like D-pad */
+    /* Grid placement for D-pad */
     .up    { grid-column: 2; grid-row: 1; }
     .left  { grid-column: 1; grid-row: 2; }
+    .down  { grid-column: 2; grid-row: 2; }
     .right { grid-column: 3; grid-row: 2; }
-    .down  { grid-column: 2; grid-row: 3; margin-top: 8px; } /* Lower down button */
 
+    /* =========
+       CONTROL BUTTONS
+       - Large tap area, subtle shadow for depth, animated press feedback.
+       - :focus-visible outline improves keyboard accessibility.
+       ========= */
     .ctrl-btn {
       width: var(--btn-size);
       height: var(--btn-size);
-      border-radius: 18px;
+      border-radius: 16px;
       border: 2px solid #444;
       background: #111;
       color: #fff;
-      font-size: 38px;
+      font-size: 32px;
       font-weight: bold;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 6px 14px rgba(0,0,0,0.4);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
       transition: transform 0.02s ease, background 0.15s ease, border-color 0.15s ease;
     }
-
     .ctrl-btn:active {
-      transform: scale(0.97);
+      transform: scale(0.98);
       background: #0d0d0d;
       border-color: var(--accent);
     }
-
     .ctrl-btn:focus-visible {
       outline: 3px solid var(--accent);
       outline-offset: 2px;
     }
 
+    /* =========
+       UI TEXT
+       ========= */
     h2 { margin: 10px 0 12px; }
 
+    /* Live scores mirrored from canvas text for screen readers and smaller screens */
     .scores {
       display: flex;
       gap: 12px;
@@ -95,25 +123,46 @@
 </head>
 <body>
   <h2>Snake Game</h2>
+
+  <!-- Live region ensures assistive tech hears score updates without extra interaction -->
   <div class="scores" id="scores" aria-live="polite"></div>
 
+  <!--
+    Canvas acts as the primary game board.
+    Width/height define the intrinsic pixel grid for crisp rendering.
+    The aria-label provides context to screen readers.
+  -->
   <canvas id="game" width="600" height="600" aria-label="Snake game board"></canvas>
 
-  <!-- On-screen mobile controls -->
+  <!--
+    On-screen mobile controls (D-pad).
+    - Buttons have semantic <button> elements with ARIA labels.
+    - Works alongside keyboard input for desktop players.
+  -->
   <div class="controls" aria-label="Directional controls">
     <button class="ctrl-btn up"    id="btnUp"    aria-label="Move up">▲</button>
     <button class="ctrl-btn left"  id="btnLeft"  aria-label="Move left">◀</button>
-    <button class="ctrl-btn right" id="btnRight" aria-label="Move right">▶</button>
     <button class="ctrl-btn down"  id="btnDown"  aria-label="Move down">▼</button>
+    <button class="ctrl-btn right" id="btnRight" aria-label="Move right">▶</button>
   </div>
 
   <script>
+    /* =========
+       CORE CONSTANTS & CONTEXT
+       - GRID_SIZE defines logical cells (square board).
+       - CELL_SIZE derived from canvas width—keeps drawing math simple.
+       ========= */
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
 
     const GRID_SIZE = 30;
     const CELL_SIZE = canvas.width / GRID_SIZE;
 
+    /* =========
+       INPUT MAP
+       - Normalizes keyboard (arrows + WASD) into vector directions.
+       - Values are [dx, dy]; up is negative y because canvas origin is top-left.
+       ========= */
     const DIRECTIONS = {
       'ArrowUp': [0, -1],
       'ArrowDown': [0, 1],
@@ -125,6 +174,11 @@
       'd': [1, 0]
     };
 
+    /* =========
+       GAME STATE
+       - Each snake tracks its body (head at index 0), direction, growth flag, color, and score.
+       - Player starts on the left; AI starts on the right for symmetric play.
+       ========= */
     let snake = {
       body: [{x: 5, y: 15}, {x: 4, y: 15}, {x: 3, y: 15}],
       dir: {x: 1, y: 0},
@@ -141,9 +195,14 @@
       score: 0
     };
 
+    // Reward (food) spawns at a cell not occupied by either snake.
     let reward = {x: 10, y: 10};
     let gameOver = false;
 
+    /**
+     * Return a random unoccupied grid cell for the reward.
+     * Loops until an empty spot is found; with typical snake sizes this is fast.
+     */
     function randomReward() {
       while (true) {
         let pos = {
@@ -156,16 +215,30 @@
       }
     }
 
+    /**
+     * Unified direction change handler for both keyboard and on-screen buttons.
+     * - Prevents 180° turns by ensuring newDir isn't the exact opposite of current.
+     * - Ignores input when game is over.
+     */
     function changeDir(keyLike) {
       const newDir = DIRECTIONS[keyLike];
       if (!newDir || gameOver) return;
+
+      // Prevent reversing directly into yourself (e.g., right -> left)
       if (snake.dir.x + newDir[0] !== 0 || snake.dir.y + newDir[1] !== 0) {
         snake.dir = { x: newDir[0], y: newDir[1] };
       }
     }
 
+    // Keyboard controls (desktop). Keydown chosen for responsive handling.
     document.addEventListener('keydown', e => changeDir(e.key));
 
+    /**
+     * Bind a control button to a "virtual key" event.
+     * - pointerdown gives immediate response on touch screens.
+     * - click is a fallback for non-pointer environments.
+     * - preventDefault stops double-trigger and avoids focus scrolling issues.
+     */
     const bindBtn = (el, keyLike) => {
       ['pointerdown','click'].forEach(evt =>
         el.addEventListener(evt, ev => { ev.preventDefault(); changeDir(keyLike); }, { passive: false })
@@ -176,12 +249,22 @@
     bindBtn(document.getElementById('btnLeft'), 'ArrowLeft');
     bindBtn(document.getElementById('btnRight'), 'ArrowRight');
 
+    /**
+     * Advance a snake by one cell in its current direction.
+     * - Unshift adds a new head.
+     * - If not growing, pop removes the tail (constant length move).
+     */
     function moveSnake(s) {
       const newHead = {x: s.body[0].x + s.dir.x, y: s.body[0].y + s.dir.y};
       if (!s.grow) s.body.pop(); else s.grow = false;
       s.body.unshift(newHead);
     }
 
+    /**
+     * Collision detection for a snake:
+     * - Out of bounds.
+     * - Self-collision (head overlaps any body segment).
+     */
     function collision(s) {
       const head = s.body[0];
       return (
@@ -191,6 +274,12 @@
       );
     }
 
+    /**
+     * Very simple AI:
+     * - Greedy Manhattan distance towards the reward.
+     * - Filters out moves that would hit walls or either snake’s body.
+     * - If no better move is found, it keeps its current direction.
+     */
     function aiChooseDirection() {
       const head = aiSnake.body[0];
       let bestDir = aiSnake.dir;
@@ -198,10 +287,14 @@
 
       [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}].forEach(d => {
         const next = {x: head.x + d.x, y: head.y + d.y};
+
+        // Reject illegal moves: collide with self, player, or walls
         if (aiSnake.body.some(p => p.x === next.x && p.y === next.y) ||
             snake.body.some(p => p.x === next.x && p.y === next.y) ||
             next.x < 0 || next.x >= GRID_SIZE || next.y < 0 || next.y >= GRID_SIZE)
           return;
+
+        // Greedy heuristic: minimize Manhattan distance to reward
         const dist = Math.abs(next.x - reward.x) + Math.abs(next.y - reward.y);
         if (dist < minDist) {
           minDist = dist;
@@ -211,17 +304,27 @@
       aiSnake.dir = bestDir;
     }
 
+    /* ======== RENDERING HELPERS ======== */
+
+    // Draw a single cell using fillRect aligned to the grid.
     function drawCell(x, y, color) {
       ctx.fillStyle = color;
       ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
     }
 
+    // Optional visual border around the canvas playfield.
     function drawBorder() {
       ctx.strokeStyle = 'grey';
       ctx.lineWidth = 2;
       ctx.strokeRect(0, 0, canvas.width, canvas.height);
     }
 
+    /**
+     * Full frame render:
+     * - Clear canvas
+     * - Draw border, reward, both snakes
+     * - Paint scores on canvas and mirror to DOM for accessibility/resize friendliness
+     */
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawBorder();
@@ -229,16 +332,24 @@
       snake.body.forEach(p => drawCell(p.x, p.y, snake.color));
       aiSnake.body.forEach(p => drawCell(p.x, p.y, aiSnake.color));
 
+      // Canvas score text (visual)
       ctx.fillStyle = 'white';
       ctx.font = "20px Arial";
       ctx.fillText('Player: ' + snake.score, 10, 20);
       const aiLabel = 'AI: ' + aiSnake.score;
       const metrics = ctx.measureText(aiLabel);
       ctx.fillText(aiLabel, canvas.width - metrics.width - 10, 20);
+
+      // DOM score (accessible/live-updating and responsive)
       document.getElementById('scores').textContent =
         `Player: ${snake.score} | AI: ${aiSnake.score}`;
     }
 
+    /**
+     * End the game once and reload the page to reset state.
+     * Alert provides instant feedback; for production you might replace
+     * with a custom modal and a "Play again" button.
+     */
     function endGame(message) {
       if (!gameOver) {
         gameOver = true;
@@ -247,18 +358,34 @@
       }
     }
 
+    /**
+     * Single tick of game logic:
+     * - Move snakes
+     * - Check loss/win/tie/overlap conditions
+     * - Handle food consumption and growth
+     * - Update AI direction
+     * - Re-render frame
+     */
     function update() {
       if (gameOver) return;
+
+      // 1) Move both snakes
       moveSnake(snake);
       moveSnake(aiSnake);
 
+      // 2) Wall/self collisions
       if (collision(snake)) endGame("You Lose! 😢");
       if (collision(aiSnake)) endGame("You Win! 🏆");
+
+      // 3) Head-on tie (both move into same cell)
       if (snake.body[0].x === aiSnake.body[0].x && snake.body[0].y === aiSnake.body[0].y)
         endGame("It's a Tie! 🤝");
+
+      // 4) Player head into AI body (excludes head-on, handled above)
       if (aiSnake.body.some(p => p.x === snake.body[0].x && p.y === snake.body[0].y))
         endGame("You Lose! 😢");
 
+      // 5) Food consumption + growth + respawn
       if (snake.body[0].x === reward.x && snake.body[0].y === reward.y) {
         snake.grow = true; snake.score++; reward = randomReward();
       }
@@ -266,10 +393,15 @@
         aiSnake.grow = true; aiSnake.score++; reward = randomReward();
       }
 
+      // 6) Update AI pathing for next tick
       aiChooseDirection();
+
+      // 7) Draw the new frame
       draw();
     }
 
+    // Fixed-timestep game loop (100 ms per tick ≈ 10 FPS).
+    // For smoother motion, consider requestAnimationFrame with delta time.
     setInterval(update, 100);
   </script>
 </body>
